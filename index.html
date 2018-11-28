@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<!-- saved from url=(0021)http://weitz.de/sift/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+    
+    <script src="./SIFT - Scale-Invariant Feature Transform_files/d3.js" charset="utf-8"></script>
+    <script src="./SIFT - Scale-Invariant Feature Transform_files/math.js"></script>
+    <script src="./SIFT - Scale-Invariant Feature Transform_files/code.js"></script>
+    <style>
+     * { font-family: Verdana, Geneva, sans-serif; }
+     p, h4 { margin-left: auto; margin-right: auto; max-width: 60em; text-align: justify; }
+     p.info { text-align: left; width: 100%; }
+     ul, li { margin-left: auto; margin-right: auto; max-width: 50em; text-align: justify; }
+     table { border-collapse: collapse; }
+     td { padding: 2px 1em; border: 1px solid black; text-align: center; font-size: x-small; }
+     td.numTD { text-align: right; }
+     th { padding: 2px 1em; border-style: solid; border-width: 1px 1px 2px 1px; text-align: center; font-size: x-small; }
+     canvas { padding : 0 }
+     #dropZone {
+       border: 2px dashed #bbbbbb;
+       border-radius: 7px;
+       padding: 15px;
+     }
+    </style>
+    <title>SIFT - Scale-Invariant Feature Transform</title>
+  </head>
+  <body>
+    <h2 align="center">SIFT - Scale-Invariant Feature Transform</h2>
+    <p>[Click <a href="http://weitz.de/sift/index.html?size=large">here</a> if you have a large screen (at least 1600 pixels wide).]</p><p>The <a href="https://en.wikipedia.org/wiki/Scale-invariant_feature_transform">scale-invariant feature transform (SIFT)</a> is an algorithm used to detect and describe local features in digital images.
+      It locates certain <em>key points</em> and then furnishes them
+      with quantitative information (so-called <em>descriptors</em>) which can for example be used for object
+      recognition.  The descriptors are supposed to be invariant against various transformations which might make images look different although they represent the same object(s).  More about that below.</p>
+    <p>This page tries to describe the main ideas of SIFT visually and interactively.</p>
+    <p><b style="color: red">To start, you can drop your own picture on the square below:</b></p>
+    <center><canvas width="64" height="64" id="dropZone" title="Drop an image here"></canvas></center>
+    <p style="font-size: small">[This page should work with recent desktop versions of <a href="https://www.google.com/chrome/">Chrome</a> and <a href="https://www.mozilla.org/en-US/firefox/new/">Firefox</a>.  I haven't tested with other browsers.]</p>
+    <center><canvas width="838" height="468" id="scaleSpace"></canvas></center>
+    <p></p>
+    <p>We start with the picture you provided or with our default picture, a portrait of <a href="https://en.wikipedia.org/wiki/Carl_Friedrich_Gauss">Carl Friedrich Gauß</a>.
+      (Or actually we start with the <span class="showMax" id="imageWidth">64</span>x<span class="showMax" id="imageHeight">64</span> version
+      you see at the top of the page.  We might have shrunk your original picture in
+    order to keep the size of this page manageable).</p>
+    <p>The algorithm first doubles the width and height of its input using <a href="https://en.wikipedia.org/wiki/Bilinear_interpolation">bilinear_interpolation</a>.  That's the first picture above, the one in its own row.</p>
+    <p>This picture is subsequently blurred using a <a href="https://en.wikipedia.org/wiki/Gaussian_blur">Gaussian convolution</a>. That's indicated by the orange arrow.</p>
+    <p>What follows is a sequence of further convolutions with increasing <a href="https://en.wikipedia.org/wiki/Standard_deviation">standard deviation</a>.  Each picture further to the right is the result of convoluting its left neighbor, as indicated by the green arrow.</p>
+    <p>Finally, the picture at the end of each row is <a href="https://en.wikipedia.org/wiki/Decimation_%28signal_processing%29">downsampled</a> - see the blue arrow.  This starts another row of convolutions.  We repeat this process until the pictures are too small to proceed.  (By the way, each row is usually called an <a href="https://en.wikipedia.org/wiki/Octave_%28electronics%29"><em>octave</em></a> since the sampling rate is decreased by a factor of two per stage.)</p>
+    <p>What we now have constructed is called a <a href="https://en.wikipedia.org/wiki/Scale_space"><em>scale space</em></a>.  The point of doing this is to simulate different scales of observation (as you move further down in the table)  and to suppress fine-scale structures (as you move to the right).</p>
+    <p>Note that the representation above has been <a href="https://en.wikipedia.org/wiki/Normalization_%28image_processing%29">normalized</a> - see the gray chart at its bottom.  This will be especially noticeable for low-contrast images.  (An input with full contrast will have black at 0.00 and white at 1.00.)</p>
+    <p>Now for the next step. Let's imagine for a moment that each octave of our scale space were a continuous space with three dimensions: the <em>x</em> and <em>y</em> coordinates of the pixels and the standard deviation of the convolution.  In an ideal world, we would now want to compute the <a href="https://en.wikipedia.org/wiki/Laplace_operator">Laplacian</a> of the <em>scale-space function</em> which assigns gray values to each element of this space.  The extrema of the Laplacian would then be candidates for the <em>key points</em> our algorithm is looking for.  But as we have to work in a discrete approximation of this continuous space, we'll instead use a technique called <a href="https://en.wikipedia.org/wiki/Difference_of_Gaussians">difference of Gaussians</a>.</p>
+    <p>For each pair of horizontally adjacent pictures in the table above, we compute the differences of the individual pixels.</p>
+    <center><canvas width="700" height="330" id="DoG"></canvas></center>
+    <p>If you click on one of the pixels above, you will see below how the difference for this individual pixel was calculated.  You'll see a clipping of the difference image in the middle while to the left and right you'll see the corresponding clippings from the two scale space images which were subtracted.  Note that bright spots in the difference image mean there was an increase in brightness while dark spots mean the opposite.  Medium gray (see the marker in the gray chart above) indicates that there was no change.</p>
+    <p>(All the differences are usually comparatively small, by the way.  If the difference images hadn't been normalized, we'd see mostly or only medium gray.)</p>
+    <center><canvas width="340" height="130" id="DoGExplain"></canvas></center>
+    <p>The discrete extrema of these difference images will now be good approximations for the actual extrema we talked about above.  A <em>discrete maximum</em> in our case is a pixel whose gray value is larger than those of all of its 26 neighbor pixels; and a <em>discrete minimum</em> is of course defined in an analogous way.  Here we count as "neighbors" the eight adjacent pixels in the same picture, the corresponding two pixels in the adjacent pictures in the same octave, and finally <em>their</em> neighbors in the same picture.</p>
+    <p>The extrema we've found are marked below.  (Some are marked with yellow circles.  These are indeed extrema, but their absolute values are so small that we'll discard them before proceeding.  The algorithm assumes that it's likely these extrema exist only due to image noise.)</p>
+    <center><canvas width="424" height="290" id="extrema"></canvas></center>
+    <p>You can click on each of the extrema above to see the pixel and its 26 neighbors rendered below.  (Note that the values shown are of course rounded and thus some of the neighboring values might look identical to the extremal value although in reality they aren't.)</p>
+    <center><canvas width="472" height="164" id="ExtremaExplain"></canvas></center>
+    <p>The extrema we've found so far will of course have discrete coordinates.  We now try to refine these coordinates.  This is done (for each extremum) by approximating the quadratic <a href="https://en.wikipedia.org/wiki/Taylor_expansion">Taylor expansion</a> of the scale-space function and computing its extrema.  (The <a href="https://en.wikipedia.org/wiki/Gradient">gradient</a> and the <a href="https://en.wikipedia.org/wiki/Hessian_matrix">Hessian</a> are approximated using <a href="https://en.wikipedia.org/wiki/Finite_difference">finite differences</a>.)  This is an iterative process and either we are able to refine the location or we give up after a couple of steps and discard the point.</p>
+    <p>Now that we have better ("continuous") coordinates, we also do
+      a bit more.  We try to identify (and discard) key point candidates
+    which lie on edges.  These aren't good key points as they are
+      invariant to translations parallel to the edge direction.  Edge extrema are found by comparing the <a href="https://en.wikipedia.org/wiki/Principal_curvature">principal curvatures</a> of the scale-space function (or rather its projection onto the picture plane) at the corresponding locations.  (This is done with the help of the <a href="https://en.wikipedia.org/wiki/Trace_%28linear_algebra%29">trace</a> and the <a href="https://en.wikipedia.org/wiki/Determinant">determinant</a>
+      of the Hessian, but we won't discuss the details here.)</p>
+    <p>The remaining key points are shown below.  (As we now have
+      better estimates regarding their position, we can also discard
+      some more low-contrast points.  These are again marked with
+      yellow color.)</p>
+    <center><canvas width="424" height="290" id="keyPoints"></canvas></center>
+    <p>You can click on the key points above to see in the table below
+      how their scale-space coordinates have been refined.</p>
+    <center>
+      <table>
+        <tbody><tr><th></th><th>discrete</th><th>interpolated</th></tr>
+        <tr><td><em>x</em></td><td id="xOld" class="numTD"></td><td id="xNew" class="numTD"></td></tr>
+        <tr><td><em>y</em></td><td id="yOld" class="numTD"></td><td id="yNew" class="numTD"></td></tr>
+        <tr><td><em>scale</em></td><td id="sOld" class="numTD"></td><td id="sNew" class="numTD"></td></tr>
+      </tbody></table>
+    </center>
+    <p>You might have the impression that there are some "new" points which weren't among the extrema further above.  But these will be points which moved from one scale picture to another one.  (For example, if a point was originally in the middle, i.e. if its scale value had been&nbsp;2, the refined value could now be&nbsp;2.57.  That would mean it'd now appear on the right as the nearest integer would now be&nbsp;3.)</p>
+    <p>The algorithm now assigns to each remaining key point its <em>reference orientation</em>, if possible.
+    Very roughly, we observe all gradients in the direct neighborhood
+    of such a point and see if many of them have approximately the same direction.</p>
+    <p>(The technical details are as follows: For each pixel in a square-shaped patch around the key point, we approximate the <a href="https://en.wikipedia.org/wiki/Gradient">gradient</a> using <a href="https://en.wikipedia.org/wiki/Finite_difference">finite differences</a>.  Recall that the gradient points in the direction of the greatest increase and its magnitude is the <a href="https://en.wikipedia.org/wiki/Slope">slope</a> in that direction.  The intervall from 0 to 360 degrees is divided into a fixed number of bins (36 by default) and the value of the bin the gradient's direction belongs to is incremented by the gradient's magnitude after it has been multiplied with a <a href="https://en.wikipedia.org/wiki/Gaussian_blur">Gaussian weight</a>.  The latter is done to reduce the contribution of more distant pixels.  The resulting <a href="https://en.wikipedia.org/wiki/Histogram">histogram</a>, i.e. the list of bins, is then smoothed
+      by repeated <a href="https://en.wikipedia.org/wiki/Box_blur">box blurs</a>.  Finally, extrema of this histogram are identified and selected if their value exceeds a certain threshold.  A better approximation for the reference orientation is then computed as the maximum of the <a href="https://en.wikipedia.org/wiki/Polynomial_interpolation">quadratic interpolation</a>
+      of the histogram extremum and the values in its two neighboring bins.)</p>
+    <p>Key points near the image border which don't have enough neighboring pixels to compute a reference orientation are discarded.  Key points without a dominating orientation are also discarded.  On the other hand, key points with more than one dominating orientation might appear more than once in the next steps, namely once per orientation.</p>
+    <center><canvas width="424" height="290" id="reference"></canvas></center>
+    <p>If you click on one of the key points above, you will see below to the left the part of its neighborhood that was investigated and the reference orientation that was computed.  To the right, you will see the (smoothed and normalized) histogram from which this orientation was derived.</p>
+    <center>
+      <table>
+        <tbody><tr>
+          <td style="border: 0px"><canvas width="137" height="137" id="ReferenceExplain"></canvas></td>
+          <td style="border: 0px" width="20px"></td>
+          <td style="border: 0px"><canvas width="137" height="137" id="Pie"></canvas></td>
+        </tr>
+      </tbody></table>
+    </center>
+    <p>We now have our final set of key points (well, almost) and
+    will, as the last step, compute the <em>descriptors</em> for each of them.</p>
+    <p>This step is pretty similar to the one above.  We will again compute a histogram for the distribution of the directions of the gradients in a neighborhood of each key point.  The difference is that this time the neighborhood is a circle and the coordinate system is rotated to match the reference orientation.  Also, the full truth is that we not only compute <em>one</em>, but rather <em>sixteen</em> histograms.  Each histogram corresponds to a point near the center of the new coordinate system and the contribution of each gradient from within the circle-shaped neighborhood is distributed over these histograms according to proximity.</p>
+    <p>(Also, as a minor technical detail, some key points might be discarded at this last step if their circle wouldn't fit into the image.)</p>
+    <center><canvas width="424" height="290" id="descriptors"></canvas></center>
+    <p>You can click on the key points above to see the neighborhood and the coordinate system used for the descriptor generation below.  You will also see a rendering of the actual descriptor, i.e. of the histograms (which are normalized and represented internally as 4×4×8=128 8-bit integers).  (Like above, one should actually imagine the histograms to be rendered as <a href="https://en.wikipedia.org/wiki/Pie_chart">pie charts</a> because
+    we're talking about angles here.)</p>
+    <center><canvas width="126" height="126" id="DescriptorExplain"></canvas></center>
+    <center><canvas width="180" height="180" id="Histograms"></canvas></center>
+    <p>So, what do we have now?  We have a potentially large set of
+    descriptors.  Practical experience has shown that these
+    descriptors can often be used to identify objects in images even
+      if they are depicted with different illumination, from a different
+    perspective, or in a different size compared to a reference image.
+    Why does this work?  Here are some reasons:
+      </p><ul>
+        <li>Key points are extracted at different scales and blur levels and all subsequent computations are performed within the scale space framework.  This will make the descriptors invariant to image scaling and small changes in perspective.</li>
+        <li>Computation relative to a reference orientation is supposed to make the descriptors robust against rotation.</li>
+        <li>Likewise, the descriptor information is stored relative to the key point position and thus invariant against translations.</li>
+        <li>Many potential key points are discarded if they are deemed unstable or hard to locate precisely.  The remaining key points should thus be relatively immune to image noise.</li>
+        <li>The histograms are normalized at the end which means the descriptors will not store the magnitudes of the gradients, only their relations to each other.  This should make the descriptors invariant against global, uniform illumination changes.</li>
+        <li>The histogram values are also thresholded to reduce the
+        influence of large gradients.  This will make the information
+          partly immune to local, non-uniform changes in illumination.</li>
+      </ul>
+    <p></p>
+    <p style="font-size: small">&nbsp;<br>
+      The algorithm used here is based on <a href="http://www.ipol.im/pub/art/2014/82/article.pdf"><em>Anatomy of the SIFT Method</em></a> by Ives Rey-Otero and Mauricio Delbracio.</p>
+    <p class="info">
+      <br>
+      &nbsp;
+      <br>
+      <span style="font-size: x-small">Copyright (c) 2016, Prof. Dr. Edmund <a href="http://weitz.de/">Weitz</a>.&nbsp;<a href="http://weitz.de/imprint.html">Impressum, Datenschutzerklärung</a></span>
+    </p>
+    <img id="default" style="display: none" src="./SIFT - Scale-Invariant Feature Transform_files/gauss.jpg">
+  
+
+</body></html>
